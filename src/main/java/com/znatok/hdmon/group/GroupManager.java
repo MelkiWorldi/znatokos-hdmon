@@ -32,8 +32,8 @@ public final class GroupManager {
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger("HDMon/GroupManager");
 
-    public static final int MAX_COLS = 12;
-    public static final int MAX_ROWS = 12;
+    public static final int MAX_COLS = 16;
+    public static final int MAX_ROWS = 9;
 
     /** Keyed by dimension then by any member BlockPos — all members map to their group. */
     private static final Map<ResourceKey<Level>, Map<BlockPos, MonitorGroup>> INDEX = new HashMap<>();

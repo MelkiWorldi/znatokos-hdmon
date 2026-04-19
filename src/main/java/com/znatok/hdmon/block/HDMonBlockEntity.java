@@ -32,11 +32,11 @@ import java.util.zip.Inflater;
 public class HDMonBlockEntity extends BlockEntity {
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger("HDMon/BE");
 
-    public static final int WIDTH = 160;
-    public static final int HEIGHT = 90;
+    public static final int WIDTH = 60;
+    public static final int HEIGHT = 60;
     public static final int TILE = 10;
 
-    /** Standalone/origin buffer (160*cols x 90*rows). Non-origin BEs leave this at 160x90 and ignore it. */
+    /** Standalone/origin buffer (WIDTH*cols x HEIGHT*rows). Non-origin BEs leave this at WIDTH x HEIGHT and ignore it. */
     private PixelBuffer buffer = new PixelBuffer(WIDTH, HEIGHT);
     private DirtyTracker dirty = new DirtyTracker(1, 1);
 

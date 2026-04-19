@@ -1,19 +1,24 @@
 # HDMonitor (znatokos-hdmon)
 
 A NeoForge 1.21.1 addon for CC:Tweaked adding a high-resolution RGB monitor
-block. Every block is 160x90 true-color pixels (16:9); up to 12x12 blocks
-auto-merge into a single logical screen of 1920x1080. Framebuffer updates are
-shipped as Deflater-compressed 10x10 tile diffs and right-clicks are reported
-to Lua as `monitor_touch` events — same shape as vanilla CC monitors.
+block. Every block is 60x60 true-color pixels (square, 1 pixel = 1/60 of a
+block); up to 16x9 blocks auto-merge into a single logical screen of 960x540
+(16:9). Framebuffer updates are shipped as Deflater-compressed 10x10 tile
+diffs and right-clicks are reported to Lua as `monitor_touch` events — same
+shape as vanilla CC monitors.
 
 ### Resolution table
 
-| Group     | Pixels      | Notes          |
-|-----------|-------------|----------------|
-| 1x1       | 160x90      | 16:9 native    |
-| 4x4       | 640x360     | 360p           |
-| 8x8       | 1280x720    | 720p           |
-| 12x12     | 1920x1080   | 1080p (max)    |
+| Group     | Pixels      | Notes                         |
+|-----------|-------------|-------------------------------|
+| 1x1       | 60x60       | square, single block          |
+| 4x4       | 240x240     | square                        |
+| 8x8       | 480x480     | square                        |
+| 16x6      | 960x360     | 8:3 aspect                    |
+| 16x9      | 960x540     | 16:9 (max)                    |
+
+Only the full 16x9 cap yields a true 16:9 group — other integer block counts
+within the 16x9 cap don't reduce to 16:9.
 
 ## Installation
 
@@ -34,13 +39,13 @@ Yields one `hdmon:hd_monitor`.
 ## Peripheral API
 
 Peripheral type: `hdmonitor`. Any block in the group exposes the full logical
-screen — `cols*160` x `rows*90` pixels, origin at top-left.
+screen — `cols*60` x `rows*60` pixels, origin at top-left.
 
 ```lua
 local m = peripheral.find("hdmonitor")
 
 -- Info
-local w, h   = m.getSize()       -- e.g. 320, 90 for a 2x1 group
+local w, h   = m.getSize()       -- e.g. 120, 60 for a 2x1 group
 local bw, bh = m.getBlockSize()  -- e.g. 2, 1
 
 -- Drawing
@@ -99,7 +104,7 @@ Place multiple `hdmon:hd_monitor` blocks adjacent on the same wall (same
 FACING, in the plane perpendicular to facing) and they auto-merge into one
 logical screen.
 
-- Max group size: 12x12 blocks (1920x1080 px).
+- Max group size: 16x9 blocks (960x540 px, 16:9).
 - Only rectangular groups — non-rect layouts leave odd blocks as 1x1 screens.
 - Groups are not persisted; they rebuild on chunk load (brief flicker is
   normal).
@@ -115,7 +120,7 @@ logical screen.
   Throttled to at most once per 100 ms per origin.
 
 This keeps bandwidth proportional to on-screen change, not screen area —
-scrolling one line of text on a 1920x1080 screen sends a few KB, not ~6 MB.
+scrolling one line of text on a 960x540 screen sends a few KB, not ~1.5 MB.
 
 ## Plan
 
