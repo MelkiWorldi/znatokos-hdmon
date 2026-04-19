@@ -121,10 +121,18 @@ public class HDMonBlock extends BaseEntityBlock {
         if (px < 0) px = 0; if (px > maxX) px = maxX;
         if (py < 0) py = 0; if (py > maxY) py = maxY;
 
-        BlockEntity obe = level.getBlockEntity(hd.getOriginPos());
-        if (obe instanceof HDMonBlockEntity origin) {
-            com.znatok.hdmon.peripheral.HDMonPeripheral p = origin.getPeripheral(null);
-            p.fireTouch(px, py);
+        // Fire touch on every BE in the group — the connecting computer could be attached
+        // via any member's peripheral (wired modem on any block), not just origin.
+        com.znatok.hdmon.group.MonitorGroup g = com.znatok.hdmon.group.GroupManager.getGroup(level, pos);
+        if (g != null) {
+            for (BlockPos mp : g.members) {
+                BlockEntity mbe = level.getBlockEntity(mp);
+                if (mbe instanceof HDMonBlockEntity mhd) {
+                    mhd.getPeripheral(null).fireTouch(px, py);
+                }
+            }
+        } else {
+            hd.getPeripheral(null).fireTouch(px, py);
         }
     }
 }
