@@ -38,6 +38,113 @@ public final class GroupManager {
     /** Keyed by dimension then by any member BlockPos — all members map to their group. */
     private static final Map<ResourceKey<Level>, Map<BlockPos, MonitorGroup>> INDEX = new HashMap<>();
 
+    /** Pending saved groups waiting for all members to load. Keyed by (dim, origin). */
+    private static final Map<ResourceKey<Level>, Map<BlockPos, PendingGroup>> PENDING = new HashMap<>();
+
+    private static Map<BlockPos, PendingGroup> pending(Level level) {
+        return PENDING.computeIfAbsent(level.dimension(), k -> new HashMap<>());
+    }
+
+    private static final class PendingGroup {
+        final BlockPos origin;
+        final Direction facing;
+        final int cols, rows;
+        final Set<BlockPos> expected;
+        final Set<BlockPos> arrived = new HashSet<>();
+        PendingGroup(BlockPos origin, Direction facing, int cols, int rows, Set<BlockPos> expected) {
+            this.origin = origin;
+            this.facing = facing;
+            this.cols = cols;
+            this.rows = rows;
+            this.expected = expected;
+        }
+    }
+
+    private static Set<BlockPos> enumerateMembers(BlockPos origin, Direction facing, int cols, int rows) {
+        Direction right = rightAxis(facing);
+        Set<BlockPos> s = new HashSet<>(cols * rows);
+        for (int c = 0; c < cols; c++) {
+            for (int r = 0; r < rows; r++) {
+                s.add(origin.relative(right, c).relative(Direction.UP, r));
+            }
+        }
+        return s;
+    }
+
+    /** BE with saved group metadata loaded. Register in pending; finalize when all members present. */
+    public static void onBlockLoadedWithSavedGroup(Level level, BlockPos pos, Direction facing,
+                                                    BlockPos savedOrigin, int cols, int rows,
+                                                    int col, int row) {
+        if (level.isClientSide) return;
+        Map<BlockPos, MonitorGroup> idx = index(level);
+        Map<BlockPos, PendingGroup> pend = pending(level);
+
+        LOG.info("[GroupManager] savedLoad pos={} origin={} cols={} rows={}", pos, savedOrigin, cols, rows);
+
+        // If this member is already part of a finalized group matching saved dims, just ensure it's linked.
+        MonitorGroup existing = idx.get(pos);
+        if (existing != null && existing.originPos.equals(savedOrigin)
+                && existing.cols == cols && existing.rows == rows) {
+            notifyBEJoined(level, pos, existing);
+            return;
+        }
+
+        PendingGroup pg = pend.get(savedOrigin);
+        if (pg == null) {
+            Set<BlockPos> expected = enumerateMembers(savedOrigin, facing, cols, rows);
+            pg = new PendingGroup(savedOrigin, facing, cols, rows, expected);
+            pend.put(savedOrigin, pg);
+        }
+        pg.arrived.add(pos);
+
+        if (pg.arrived.size() >= pg.expected.size() && pg.arrived.containsAll(pg.expected)) {
+            finalizePending(level, pg);
+            pend.remove(savedOrigin);
+        }
+    }
+
+    /** Grace-period finalize: commit pending group with whatever arrived, fallback to solos for the rest. */
+    public static void graceFinalize(Level level, BlockPos savedOrigin) {
+        if (level.isClientSide || savedOrigin == null) return;
+        Map<BlockPos, PendingGroup> pend = pending(level);
+        PendingGroup pg = pend.remove(savedOrigin);
+        if (pg == null) return;
+        LOG.info("[GroupManager] graceFinalize origin={} arrived={}/{}", savedOrigin, pg.arrived.size(), pg.expected.size());
+        // If all arrived it's just a normal finalize; else fallback: every arrived becomes solo then tryGrow.
+        if (pg.arrived.containsAll(pg.expected)) {
+            finalizePending(level, pg);
+            return;
+        }
+        Map<BlockPos, MonitorGroup> idx = index(level);
+        for (BlockPos p : pg.arrived) {
+            if (idx.get(p) != null && idx.get(p).members.size() > 1) continue;
+            MonitorGroup solo = new MonitorGroup(p, pg.facing, 1, 1, Collections.singleton(p));
+            idx.put(p, solo);
+            notifyBEJoined(level, p, solo);
+        }
+        for (BlockPos p : new ArrayList<>(pg.arrived)) {
+            tryGrow(level, p);
+        }
+    }
+
+    private static void finalizePending(Level level, PendingGroup pg) {
+        Map<BlockPos, MonitorGroup> idx = index(level);
+        LOG.info("[GroupManager] finalizePending origin={} cols={} rows={}", pg.origin, pg.cols, pg.rows);
+        MonitorGroup g = new MonitorGroup(pg.origin, pg.facing, pg.cols, pg.rows, pg.expected);
+        // Remove any stale solo entries for these positions first.
+        for (BlockPos p : pg.expected) {
+            MonitorGroup prev = idx.get(p);
+            if (prev != null && prev != g) {
+                // Remove all positions of prev that are subsumed by the new group.
+                // (Shouldn't have large prev groups here typically — they're solos from fallback.)
+            }
+            idx.put(p, g);
+        }
+        for (BlockPos p : pg.expected) {
+            notifyBEJoined(level, p, g);
+        }
+    }
+
     private static Map<BlockPos, MonitorGroup> index(Level level) {
         return INDEX.computeIfAbsent(level.dimension(), k -> new HashMap<>());
     }
@@ -97,6 +204,9 @@ public final class GroupManager {
     public static void onBlockRemoved(Level level, BlockPos pos) {
         if (level.isClientSide) return;
         Map<BlockPos, MonitorGroup> idx = index(level);
+        // Also clean pending entries that reference this pos.
+        Map<BlockPos, PendingGroup> pend = pending(level);
+        pend.values().removeIf(pg -> pg.expected.contains(pos) || pg.origin.equals(pos));
         MonitorGroup g = idx.remove(pos);
         if (g == null) return;
         if (g.members.size() == 1) return;

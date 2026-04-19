@@ -53,6 +53,17 @@ public class HDMonBlockEntity extends BlockEntity {
     private int cols = 1;
     private int rows = 1;
 
+    // Persisted group metadata loaded from NBT; used to deterministically rebuild the group on world load.
+    private boolean hasSavedGroup = false;
+    private BlockPos savedOrigin;
+    private int savedCols = 1;
+    private int savedRows = 1;
+    private int savedCol = 0;
+    private int savedRow = 0;
+    // Tick when this BE was loaded (server). Used with a grace-period to finalize a pending saved group.
+    private long loadTick = -1L;
+    private boolean savedGroupResolved = false;
+
     public HDMonBlockEntity(BlockPos pos, BlockState state) {
         super(Registries.HD_MONITOR_BE.get(), pos, state);
         this.originPos = pos;
@@ -68,10 +79,23 @@ public class HDMonBlockEntity extends BlockEntity {
     public int getCols() { return cols; }
     public int getRows() { return rows; }
 
+    public boolean hasSavedGroup() { return hasSavedGroup; }
+    public BlockPos getSavedOrigin() { return savedOrigin; }
+    public int getSavedCols() { return savedCols; }
+    public int getSavedRows() { return savedRows; }
+    public int getSavedCol() { return savedCol; }
+    public int getSavedRow() { return savedRow; }
+    public void markSavedGroupResolved() { this.savedGroupResolved = true; }
+
     /** Called by GroupManager when this BE is assigned to a (new) group. */
     public void joinGroup(BlockPos origin, int col, int row, int cols, int rows) {
         boolean changed = !origin.equals(this.originPos) || col != this.colIndex
                 || row != this.rowIndex || cols != this.cols || rows != this.rows;
+        // Early-return if nothing changed — saved group was finalized with same shape.
+        if (!changed) {
+            this.savedGroupResolved = true;
+            return;
+        }
         this.originPos = origin;
         this.colIndex = col;
         this.rowIndex = row;
@@ -84,6 +108,7 @@ public class HDMonBlockEntity extends BlockEntity {
             }
             dirty.resize(cols, rows);
         }
+        this.savedGroupResolved = true;
         if (changed) {
             if (isOrigin()) dirty.markAllDirty();
             // Force full resync so clients learn new shape.
@@ -271,8 +296,19 @@ public class HDMonBlockEntity extends BlockEntity {
             if (GroupManager.getGroup(level, pos) == null) {
                 Direction facing = state.getValue(HorizontalDirectionalBlock.FACING);
                 LOG.info("HDMon BE serverTick fallback registration at {} facing={}", pos, facing);
-                GroupManager.onBlockAdded(level, pos, facing);
+                if (be.hasSavedGroup && be.savedOrigin != null) {
+                    GroupManager.onBlockLoadedWithSavedGroup(level, pos, facing,
+                            be.savedOrigin, be.savedCols, be.savedRows, be.savedCol, be.savedRow);
+                } else {
+                    GroupManager.onBlockAdded(level, pos, facing);
+                }
             }
+        }
+        // Grace-period finalize: if origin BE is still waiting for members, nudge GroupManager.
+        if (be.hasSavedGroup && !be.savedGroupResolved && be.loadTick >= 0
+                && (level.getGameTime() - be.loadTick) > 100L) {
+            GroupManager.graceFinalize(level, be.savedOrigin);
+            be.savedGroupResolved = true;
         }
         if (!be.isOrigin()) return;
         if (be.dirty.isDirty() && be.autoFlush) {
@@ -327,6 +363,13 @@ public class HDMonBlockEntity extends BlockEntity {
     @Override
     protected void saveAdditional(net.minecraft.nbt.CompoundTag tag, net.minecraft.core.HolderLookup.Provider lookup) {
         super.saveAdditional(tag, lookup);
+        // Persist group membership for every BE so we can deterministically rebuild the group on load.
+        BlockPos op = getOriginPos();
+        tag.putLong("group_origin", op.asLong());
+        tag.putInt("group_cols", cols);
+        tag.putInt("group_rows", rows);
+        tag.putInt("group_col", colIndex);
+        tag.putInt("group_row", rowIndex);
         // Only origin BEs persist the framebuffer; non-origin blocks own no buffer data.
         if (!isOrigin()) return;
         try {
@@ -359,6 +402,21 @@ public class HDMonBlockEntity extends BlockEntity {
     @Override
     protected void loadAdditional(net.minecraft.nbt.CompoundTag tag, net.minecraft.core.HolderLookup.Provider lookup) {
         super.loadAdditional(tag, lookup);
+        // Read saved group metadata first if present.
+        if (tag.contains("group_origin")) {
+            hasSavedGroup = true;
+            savedOrigin = BlockPos.of(tag.getLong("group_origin"));
+            savedCols = Math.max(1, tag.getInt("group_cols"));
+            savedRows = Math.max(1, tag.getInt("group_rows"));
+            savedCol = tag.getInt("group_col");
+            savedRow = tag.getInt("group_row");
+            // Apply provisional so isOrigin() / getOriginPos() already return correct values before onLoad.
+            this.originPos = savedOrigin;
+            this.cols = savedCols;
+            this.rows = savedRows;
+            this.colIndex = savedCol;
+            this.rowIndex = savedRow;
+        }
         if (!tag.contains("rgb_gz")) return;
         byte[] comp = tag.getByteArray("rgb_gz");
         int rawLen = tag.getInt("rgb_len");
@@ -390,19 +448,30 @@ public class HDMonBlockEntity extends BlockEntity {
         } finally {
             inf.end();
         }
+        // Validate buffer against saved group dims if available, else provisionally against saved raster dims.
+        if (hasSavedGroup) {
+            int expW = savedCols * WIDTH;
+            int expH = savedRows * HEIGHT;
+            if (savedW != expW || savedH != expH) {
+                LOG.warn("HDMon BE load: saved buffer dims {}x{} don't match saved group dims {}x{}; discarding buffer",
+                        savedW, savedH, expW, expH);
+                return;
+            }
+        }
         // Restore buffer at saved dimensions. Group may later re-shape; applyGroup preserves pixels.
         if (buffer.width() != savedW || buffer.height() != savedH) {
             buffer = new PixelBuffer(savedW, savedH);
         }
         buffer.setAll(raw);
-        // Derive provisional cols/rows from saved dims so isOrigin() origin-buffer stays consistent
-        // until GroupManager re-merges us.
         int provCols = Math.max(1, savedW / WIDTH);
         int provRows = Math.max(1, savedH / HEIGHT);
-        this.cols = provCols;
-        this.rows = provRows;
-        this.originPos = getBlockPos();
-        dirty.resize(provCols, provRows);
+        if (!hasSavedGroup) {
+            // Legacy save with no group metadata — treat self as origin of a provisional cols x rows group.
+            this.cols = provCols;
+            this.rows = provRows;
+            this.originPos = getBlockPos();
+        }
+        dirty.resize(this.cols, this.rows);
         dirty.markAllDirty();
     }
 
@@ -411,10 +480,19 @@ public class HDMonBlockEntity extends BlockEntity {
         super.onLoad();
         if (level != null && !level.isClientSide) {
             Direction facing = getBlockState().getValue(HorizontalDirectionalBlock.FACING);
-            LOG.info("HDMon BE onLoad at {} facing={}", getBlockPos(), facing);
-            GroupManager.onBlockAdded(level, getBlockPos(), facing);
+            LOG.info("HDMon BE onLoad at {} facing={} hasSaved={}", getBlockPos(), facing, hasSavedGroup);
+            loadTick = level.getGameTime();
+            if (hasSavedGroup && savedOrigin != null) {
+                GroupManager.onBlockLoadedWithSavedGroup(level, getBlockPos(), facing,
+                        savedOrigin, savedCols, savedRows, savedCol, savedRow);
+            } else {
+                GroupManager.onBlockAdded(level, getBlockPos(), facing);
+            }
         }
     }
+
+    public long getLoadTick() { return loadTick; }
+    public boolean isSavedGroupResolved() { return savedGroupResolved; }
 
     /** Ensure new client viewers get the full buffer on chunk load. */
     @Override
