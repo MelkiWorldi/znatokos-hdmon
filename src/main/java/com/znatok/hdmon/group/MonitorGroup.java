@@ -13,8 +13,8 @@ import java.util.Set;
  * for the whole group. Non-origin members route their drawing through origin.
  */
 public class MonitorGroup {
-    public static final int BLOCK_W = 128;
-    public static final int BLOCK_H = 64;
+    public static final int BLOCK_W = 160;
+    public static final int BLOCK_H = 90;
 
     /** Origin = bottom-left block (col=0, row=0) from viewer's perspective. */
     public final BlockPos originPos;

@@ -10,7 +10,7 @@ import net.minecraft.resources.ResourceLocation;
 
 /**
  * Full buffer sync from origin BE to clients.
- * {@code pos} = origin BlockPos. {@code rgb.length} = cols*128 * rows*64 * 3.
+ * {@code pos} = origin BlockPos. {@code rgb.length} = cols*WIDTH * rows*HEIGHT * 3.
  */
 public record FullBufferSyncPacket(BlockPos pos, int cols, int rows, byte[] rgb) implements CustomPacketPayload {
     public static final Type<FullBufferSyncPacket> TYPE = new Type<>(

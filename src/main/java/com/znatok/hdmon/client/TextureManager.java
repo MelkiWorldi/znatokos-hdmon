@@ -18,7 +18,7 @@ import java.util.Map;
 
 /**
  * Client-side DynamicTexture cache keyed by the group's origin BlockPos.
- * One texture per group, sized cols*128 by rows*64. Non-origin blocks look up
+ * One texture per group, sized cols*WIDTH by rows*HEIGHT. Non-origin blocks look up
  * the same texture via their BE's origin pointer and render a UV sub-rect.
  */
 @EventBusSubscriber(modid = HDMonMod.MODID, value = Dist.CLIENT)

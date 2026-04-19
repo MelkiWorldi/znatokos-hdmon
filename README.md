@@ -1,10 +1,19 @@
 # HDMonitor (znatokos-hdmon)
 
 A NeoForge 1.21.1 addon for CC:Tweaked adding a high-resolution RGB monitor
-block. Every block is 128x64 true-color pixels; up to 8x8 blocks auto-merge
-into a single logical screen of 1024x512. Framebuffer updates are shipped as
-Deflater-compressed 16x16 tile diffs and right-clicks are reported to Lua as
-`monitor_touch` events — same shape as vanilla CC monitors.
+block. Every block is 160x90 true-color pixels (16:9); up to 12x12 blocks
+auto-merge into a single logical screen of 1920x1080. Framebuffer updates are
+shipped as Deflater-compressed 10x10 tile diffs and right-clicks are reported
+to Lua as `monitor_touch` events — same shape as vanilla CC monitors.
+
+### Resolution table
+
+| Group     | Pixels      | Notes          |
+|-----------|-------------|----------------|
+| 1x1       | 160x90      | 16:9 native    |
+| 4x4       | 640x360     | 360p           |
+| 8x8       | 1280x720    | 720p           |
+| 12x12     | 1920x1080   | 1080p (max)    |
 
 ## Installation
 
@@ -25,13 +34,13 @@ Yields one `hdmon:hd_monitor`.
 ## Peripheral API
 
 Peripheral type: `hdmonitor`. Any block in the group exposes the full logical
-screen — `cols*128` x `rows*64` pixels, origin at top-left.
+screen — `cols*160` x `rows*90` pixels, origin at top-left.
 
 ```lua
 local m = peripheral.find("hdmonitor")
 
 -- Info
-local w, h   = m.getSize()       -- e.g. 256, 64 for a 2x1 group
+local w, h   = m.getSize()       -- e.g. 320, 90 for a 2x1 group
 local bw, bh = m.getBlockSize()  -- e.g. 2, 1
 
 -- Drawing
@@ -90,7 +99,7 @@ Place multiple `hdmon:hd_monitor` blocks adjacent on the same wall (same
 FACING, in the plane perpendicular to facing) and they auto-merge into one
 logical screen.
 
-- Max group size: 8x8 blocks (1024x512 px).
+- Max group size: 12x12 blocks (1920x1080 px).
 - Only rectangular groups — non-rect layouts leave odd blocks as 1x1 screens.
 - Groups are not persisted; they rebuild on chunk load (brief flicker is
   normal).
@@ -101,12 +110,12 @@ logical screen.
 
 - First sync (new client, chunk load, group reshape): full framebuffer via
   block entity update tag + a `FullBufferSyncPacket`.
-- Steady-state updates: `TileDiffPacket` with only the 16x16 tiles that
+- Steady-state updates: `TileDiffPacket` with only the 10x10 tiles that
   changed since the last sync, each tile Deflate-compressed (BEST_SPEED).
   Throttled to at most once per 100 ms per origin.
 
 This keeps bandwidth proportional to on-screen change, not screen area —
-scrolling one line of text on a 1024x512 screen sends ~1 KB, not 1.5 MB.
+scrolling one line of text on a 1920x1080 screen sends a few KB, not ~6 MB.
 
 ## Plan
 

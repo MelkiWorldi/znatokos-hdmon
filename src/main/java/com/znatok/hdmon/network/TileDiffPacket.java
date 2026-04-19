@@ -12,8 +12,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Diff update: a list of Deflater-compressed 16x16 RGB tiles.
- * Each tile payload decompresses to exactly {@code tileSize*tileSize*3} = 768 bytes.
+ * Diff update: a list of Deflater-compressed TILExTILE RGB tiles.
+ * Each tile payload decompresses to exactly {@code tileSize*tileSize*3} bytes.
  */
 public record TileDiffPacket(BlockPos pos, int cols, int rows, List<Tile> tiles)
         implements CustomPacketPayload {

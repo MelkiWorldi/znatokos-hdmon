@@ -1,18 +1,23 @@
 package com.znatok.hdmon.util;
 
+import com.znatok.hdmon.block.HDMonBlockEntity;
+
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Tile-based dirty tracker. 16x16 pixel tiles. Group dims are always multiples
- * of 16 (cols*128 x rows*64), so tilesX = cols*8, tilesY = rows*4.
+ * Tile-based dirty tracker. TILE x TILE pixel tiles. Group dims are always
+ * multiples of TILE (cols*WIDTH x rows*HEIGHT), so tilesX = cols*(WIDTH/TILE),
+ * tilesY = rows*(HEIGHT/TILE).
  *
  * <p>Thread-safe: all mutators/readers synchronize on {@code this}. The tracker
  * lives on the origin BE and may be touched from the Lua peripheral thread and
  * the server tick thread concurrently.
  */
 public class DirtyTracker {
-    private static final int TILE = 16;
+    private static final int TILE = HDMonBlockEntity.TILE;
+    private static final int TILES_PER_COL = HDMonBlockEntity.WIDTH / TILE;
+    private static final int TILES_PER_ROW = HDMonBlockEntity.HEIGHT / TILE;
 
     private int tilesX;
     private int tilesY;
@@ -30,8 +35,8 @@ public class DirtyTracker {
     public static int tileSize() { return TILE; }
 
     public synchronized void resize(int cols, int rows) {
-        this.tilesX = Math.max(1, cols) * 8;  // cols*128 / 16
-        this.tilesY = Math.max(1, rows) * 4;  // rows*64 / 16
+        this.tilesX = Math.max(1, cols) * TILES_PER_COL;  // cols*WIDTH / TILE
+        this.tilesY = Math.max(1, rows) * TILES_PER_ROW;  // rows*HEIGHT / TILE
         this.tiles = new boolean[tilesX][tilesY];
         this.any = false;
     }

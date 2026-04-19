@@ -32,11 +32,11 @@ import java.util.zip.Inflater;
 public class HDMonBlockEntity extends BlockEntity {
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger("HDMon/BE");
 
-    public static final int WIDTH = 128;
-    public static final int HEIGHT = 64;
-    public static final int TILE = 16;
+    public static final int WIDTH = 160;
+    public static final int HEIGHT = 90;
+    public static final int TILE = 10;
 
-    /** Standalone/origin buffer (128*cols x 64*rows). Non-origin BEs leave this at 128x64 and ignore it. */
+    /** Standalone/origin buffer (160*cols x 90*rows). Non-origin BEs leave this at 160x90 and ignore it. */
     private PixelBuffer buffer = new PixelBuffer(WIDTH, HEIGHT);
     private DirtyTracker dirty = new DirtyTracker(1, 1);
 
@@ -236,7 +236,7 @@ public class HDMonBlockEntity extends BlockEntity {
                     comp = new byte[written];
                     System.arraycopy(compBuf, 0, comp, 0, written);
                 } else {
-                    // Rare: compressed > compBuf (shouldn't happen for 768-byte input with +64 slack),
+                    // Rare: compressed > compBuf (shouldn't happen for TILE*TILE*3-byte input with +64 slack),
                     // fall back to a dynamic buffer.
                     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream(1024);
                     baos.write(compBuf, 0, written);
