@@ -77,6 +77,11 @@ public final class TextureManager {
         return e.rl;
     }
 
+    // Bezel drawn on the outer pixel ring of the GROUP texture — unified frame across
+    // all blocks in a multi-block. Color matches the static ender-pearl bezel.
+    private static final int BEZEL_ABGR = 0xFF808B2E; // ABGR for RGB #2E8B80
+    private static final int BEZEL_THICKNESS = 2;     // pixels — 2 reads cleanly at 60-pixel blocks
+
     private static void upload(Entry e, HDMonBlockEntity originBE) {
         NativeImage img = e.tex.getPixels();
         if (img == null) return;
@@ -92,6 +97,16 @@ public final class TextureManager {
                 int abgr = 0xFF000000 | (b << 16) | (g << 8) | r;
                 img.setPixelRGBA(x, y, abgr);
             }
+        }
+        // Paint bezel ring on top. The outer BEZEL_THICKNESS pixels of the GROUP texture.
+        int t = BEZEL_THICKNESS;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < t && x < w; x++) img.setPixelRGBA(x, y, BEZEL_ABGR);
+            for (int x = Math.max(t, w - t); x < w; x++) img.setPixelRGBA(x, y, BEZEL_ABGR);
+        }
+        for (int x = 0; x < w; x++) {
+            for (int y = 0; y < t && y < h; y++) img.setPixelRGBA(x, y, BEZEL_ABGR);
+            for (int y = Math.max(t, h - t); y < h; y++) img.setPixelRGBA(x, y, BEZEL_ABGR);
         }
         e.tex.upload();
     }

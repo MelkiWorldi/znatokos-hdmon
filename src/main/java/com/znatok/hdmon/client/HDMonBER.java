@@ -55,9 +55,9 @@ public class HDMonBER implements BlockEntityRenderer<HDMonBlockEntity> {
         VertexConsumer vc = buffers.getBuffer(RenderType.entityCutout(tex));
         Matrix4f mat = pose.last().pose();
 
-        // Inset 1/16 block on each side → leaves the static bezel from hd_monitor_front.png
-        // visible as a frame around the dynamic framebuffer.
-        float hx = 0.4375f, hy = 0.4375f;
+        // Edge-to-edge — bezel is painted into the DynamicTexture at the group level
+        // (see TextureManager.upload), so adjacent blocks form one continuous frame.
+        float hx = 0.5f, hy = 0.5f;
         int r = 255, g = 255, b = 255, a = 255;
 
         int col = be.getColIndex();
