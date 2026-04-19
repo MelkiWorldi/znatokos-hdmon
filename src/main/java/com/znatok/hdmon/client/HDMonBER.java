@@ -5,7 +5,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.znatok.hdmon.HDMonMod;
 import com.znatok.hdmon.Registries;
 import com.znatok.hdmon.block.HDMonBlockEntity;
-import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
@@ -49,7 +49,8 @@ public class HDMonBER implements BlockEntityRenderer<HDMonBlockEntity> {
         }
         pose.translate(0, 0, 0.501);
 
-        int light = LevelRenderer.getLightColor(be.getLevel(), be.getBlockPos().relative(facing));
+        // Screen surface is emissive — always render at full brightness.
+        int light = LightTexture.FULL_BRIGHT;
 
         VertexConsumer vc = buffers.getBuffer(RenderType.entityCutout(tex));
         Matrix4f mat = pose.last().pose();

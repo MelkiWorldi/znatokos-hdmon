@@ -98,6 +98,27 @@ while true do
 end
 ```
 
+## Persistence
+
+The framebuffer is saved in the block entity NBT (Deflate-compressed at
+`BEST_COMPRESSION`). Screen contents survive chunk unloads and world
+restarts. Only the origin block of a group stores the full buffer; other
+members rebuild their link to it when the group re-merges on load.
+
+Rough disk cost: at 16x9 = 960x540 RGB the raw buffer is ~1.5 MB and
+compresses to roughly 300-500 KB for typical content — paid once per origin
+per chunk save.
+
+## Look and lighting
+
+- The screen surface is emissive — pixels render at full brightness
+  regardless of ambient light. The image stays readable in the dark.
+- The block emits light level 7 (similar to a lantern) so it also lights
+  its surroundings a bit, like a real backlit panel.
+- The front face texture is solid black; the live framebuffer is drawn
+  just in front of it, so adjacent monitors in a multi-block group form
+  one seamless screen.
+
 ## Multi-block groups
 
 Place multiple `hdmon:hd_monitor` blocks adjacent on the same wall (same

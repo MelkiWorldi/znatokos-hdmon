@@ -30,6 +30,7 @@ public class Registries {
             () -> new HDMonBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
                     .strength(1.5f)
+                    .lightLevel(state -> 7)
                     .noOcclusion())
     );
 

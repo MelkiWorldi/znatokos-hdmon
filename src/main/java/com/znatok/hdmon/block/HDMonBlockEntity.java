@@ -325,6 +325,88 @@ public class HDMonBlockEntity extends BlockEntity {
     }
 
     @Override
+    protected void saveAdditional(net.minecraft.nbt.CompoundTag tag, net.minecraft.core.HolderLookup.Provider lookup) {
+        super.saveAdditional(tag, lookup);
+        // Only origin BEs persist the framebuffer; non-origin blocks own no buffer data.
+        if (!isOrigin()) return;
+        try {
+            byte[] raw = buffer.copyBytes();
+            Deflater def = new Deflater(Deflater.BEST_COMPRESSION);
+            byte[] out;
+            try {
+                def.setInput(raw);
+                def.finish();
+                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream(raw.length / 4);
+                byte[] tmp = new byte[8192];
+                while (!def.finished()) {
+                    int w = def.deflate(tmp);
+                    if (w == 0) break;
+                    baos.write(tmp, 0, w);
+                }
+                out = baos.toByteArray();
+            } finally {
+                def.end();
+            }
+            tag.putByteArray("rgb_gz", out);
+            tag.putInt("rgb_len", raw.length);
+            tag.putInt("rgb_w", buffer.width());
+            tag.putInt("rgb_h", buffer.height());
+        } catch (Exception e) {
+            LOG.warn("HDMon BE save: failed to compress framebuffer: {}", e.toString());
+        }
+    }
+
+    @Override
+    protected void loadAdditional(net.minecraft.nbt.CompoundTag tag, net.minecraft.core.HolderLookup.Provider lookup) {
+        super.loadAdditional(tag, lookup);
+        if (!tag.contains("rgb_gz")) return;
+        byte[] comp = tag.getByteArray("rgb_gz");
+        int rawLen = tag.getInt("rgb_len");
+        int savedW = tag.getInt("rgb_w");
+        int savedH = tag.getInt("rgb_h");
+        if (rawLen <= 0 || savedW <= 0 || savedH <= 0 || rawLen != savedW * savedH * 3) {
+            LOG.warn("HDMon BE load: invalid persisted buffer metadata, ignoring");
+            return;
+        }
+        byte[] raw = new byte[rawLen];
+        Inflater inf = new Inflater();
+        try {
+            inf.setInput(comp);
+            int total = 0;
+            while (!inf.finished() && total < rawLen) {
+                int got = inf.inflate(raw, total, rawLen - total);
+                if (got == 0) {
+                    if (inf.needsInput() || inf.needsDictionary()) break;
+                }
+                total += got;
+            }
+            if (total != rawLen) {
+                LOG.warn("HDMon BE load: inflate produced {} bytes, expected {}; discarding", total, rawLen);
+                return;
+            }
+        } catch (java.util.zip.DataFormatException e) {
+            LOG.warn("HDMon BE load: DataFormatException inflating buffer; discarding");
+            return;
+        } finally {
+            inf.end();
+        }
+        // Restore buffer at saved dimensions. Group may later re-shape; applyGroup preserves pixels.
+        if (buffer.width() != savedW || buffer.height() != savedH) {
+            buffer = new PixelBuffer(savedW, savedH);
+        }
+        buffer.setAll(raw);
+        // Derive provisional cols/rows from saved dims so isOrigin() origin-buffer stays consistent
+        // until GroupManager re-merges us.
+        int provCols = Math.max(1, savedW / WIDTH);
+        int provRows = Math.max(1, savedH / HEIGHT);
+        this.cols = provCols;
+        this.rows = provRows;
+        this.originPos = getBlockPos();
+        dirty.resize(provCols, provRows);
+        dirty.markAllDirty();
+    }
+
+    @Override
     public void onLoad() {
         super.onLoad();
         if (level != null && !level.isClientSide) {

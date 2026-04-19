@@ -1,3 +1,6 @@
 {
-  "parent": "hdmon:block/hd_monitor"
+  "parent": "item/generated",
+  "textures": {
+    "layer0": "hdmon:item/hd_monitor"
+  }
 }
