@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "hdmon:block/hd_monitor", "y": 180 },
+    "facing=south": { "model": "hdmon:block/hd_monitor" },
+    "facing=west":  { "model": "hdmon:block/hd_monitor", "y": 90 },
+    "facing=east":  { "model": "hdmon:block/hd_monitor", "y": 270 }
+  }
+}
